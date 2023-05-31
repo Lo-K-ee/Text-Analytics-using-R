@@ -1,0 +1,293 @@
+---
+title: "MA331-Report: 2211543"
+subtitle: "TED Talks by Speaker Arthur Benjamin and Speaker Scott	McCloud"
+author: "Palaniraj, Lokesh"
+output: html_document
+---
+
+***
+```{r setup, include=FALSE}
+### Don't delete this setup code chunk from your file
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	comment = NULL
+)
+   ## DON'T ALTER THIS: this is to prevent printing the code or any unnecessary addition in your final "html" report file.
+
+# You can extend this list below to load all the packages required for your analyses:
+#====================================================================================
+library(tidytext) #makes text mining simpler with functions
+library(tidyverse) #usage of pipe function, dplyr and more
+library(ggpubr) #to combine the ggplots
+library(stopwords) #to remove the stopwords
+library(knitr) #for neat representation of tables
+library(kableExtra) #to make a compact table
+library(ggrepel) #used for overlapping text labels
+# load the 'ted_talks' data
+#=========================
+
+#Loading ted_talks.rda and filtering it with the authors' names
+setwd("C:/Files/UoE/Modules/Spring/MA331-7-SP Programming and Text Analytics with R/Report")
+load(file="ted_talks.rda")
+MyData <- ted_talks %>%
+  filter(speaker %in% c("Arthur Benjamin", "Scott McCloud"))
+
+#Compute_OR function from dsEssex package
+compute_OR <- function(numerator, denominator, correction = TRUE){
+  if(correction){
+    ODDS_N = (numerator + 0.5) / (sum(numerator) - numerator + 0.5)
+    ODDS_D = (denominator + 0.5) / (sum(denominator) - denominator + 0.5)
+  } else {
+    ODDS_N = numerator / (sum(numerator) - numerator)
+    ODDS_D = denominator / (sum(denominator) - denominator)
+  }
+  return(OR = ODDS_N/ODDS_D)
+}
+
+#Extracting the words & removing the stopwords in MyData
+
+MyData <- MyData %>% 
+  unnest_tokens(word, text)
+
+MyData <- MyData %>%
+  anti_join(get_stopwords())
+```
+## Introduction
+
+In this report, I'll be analysing & comparing the transcripts of the ted talks, 'The visual magic of comics' by **Scott McCloud** in 2009, where he spoke about the importance of visual comics right from his childhood, and his vision of its advancements in the future and 'A performance of Mathemagic' in 2007 by **Arthur Benjamin** where he performed stunning arithmetic calculations manually & verifying them with the audience's calculators, 'Teach statistics before calculus!' in 2009 by **Arthur Benjamin**  and speaking about the importance of statistics over calculus.
+
+##### _Main objectives of this report:_
+  
+  1. Summary and word count
+  2. Speakers' top words comparison
+  3. Log odds ratio between the speakers
+  4. Sentiment analysis
+
+
+## Methods
+
+To perform the comprehensive analysis of the talks from the ted speakers, we can follow several methodologies. Firstly, filtering the dataset with my appropriate speakers' list. Then with the overview of the filtered data we can able to perform the summary and occurences of words in each speaker's talk. With this information as a base, we can compute the frequently occurring word in both speakers and plot it using ggplot. Secondly, comparing the top words in both the speakers and visualizing it with Arthur Benjamin's words in x-axis & Scott McCloud's words in y-axis. Thirdly, to recognize the difference in the speakers' language, we can calculate the log odds ratio between the speakers. This would help us to understand the most distinctive words used by the speakers. Finally, we can perform the sentiment analysis for the dataset using the 'nrc' & 'bing' lexicon to interpret the emotion expressed by both speakers and comparing them to gather an intuition on both feelings.
+
+## Results
+
+As the ted_talks dataframe had a lot of different speakers data, I used _filter()_ method to segregate the speakers allocated to me and stored them in a new dataframe called MyData. Then I used _unnest_tokens()_ function to isolate the words from the entire text column and then used _anti_join()_ function to remove the stop words and counted the words of different speeches using _count()_ function, presented the plot according to the speeches and word counts. 'talk_id' attribute was used to differentiate between the speeches with same author name.
+
+##### _Summary of MyData_
+
+```{r summary, echo=FALSE}
+options(width = 200)
+
+#displaying the summary of MyData
+summary(MyData)
+
+```
+
+```{r countwords, echo=FALSE}
+######################Word counts in each Speeches###################
+
+speech_count <- MyData %>%
+  count(talk_id, speaker, headline)
+
+speech_count %>% ggplot(aes(x=speaker, y=n, fill = headline)) + 
+  geom_col(width = 0.7 ,position = "dodge") + 
+  ggtitle("Word count per speaker's speech") +
+  geom_text(aes(label=n), position=position_dodge(width=0.7), vjust=2, color = 'white')
+
+```
+
+I used the following functions to interpret and compare both the speakers' words and presented multiple plots like top words, sentiment analysis, etc. For counting the top words in both speakers' words, the following functions has been used:
+
+* _slice_max()_ - to just visualize only the top 30 recurring words, this method has been used.
+* _reorder()_ - in my case, sorted my word column with respective to and stored it in word column using _mutate()_
+* _ggplot()_ - for plotting the bar graph with 'n' & 'word' as aesthetics with the help of _geom_col()_ function. 
+
+```{r topwords, echo=FALSE, fig.width=8}
+
+#Counting top words of Arthur_Benjamin in both the talks
+
+Arthur_Benjamin <- MyData %>%
+  filter(speaker == "Arthur Benjamin") %>%
+  count(speaker, word, sort=TRUE)
+
+#Counting the top words of Scott_McCloud
+
+Scott_McCloud <- MyData %>%
+  filter(speaker == "Scott McCloud") %>%
+  count(speaker, word, sort=TRUE)
+
+#Visualisation of top words
+
+A_B_topwords <- Arthur_Benjamin %>%
+  slice_max(n, n=29) %>% 
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n,word)) + 
+  geom_col(fill = '#f8766d') + ggtitle("Arthur Benjamin's Top Words")
+
+S_M_topwords <- Scott_McCloud %>%
+  slice_max(n, n=29) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n,word)) + geom_col(fill = 'cornflowerblue') +
+  ggtitle("Scott McCloud's Top Words")
+
+#Combining Top words graphs
+ggarrange(A_B_topwords, S_M_topwords)
+```
+
+Here, I am comparing the top words from both the speakers, by grouping the words with _group_by()_ and just filtering the words recurring more than 12 times to make the plot ordinate.
+
+* _pivot_wider()_ - here it is used to create columns based on each speaker's top words count.
+* _geom_abline()_ - to draw a line to differentiate between the top words spoken by the speakers.
+
+```{r comparison, echo=FALSE, fig.height = 3, fig.width = 5, fig.align = "center", fig.asp = 1}
+
+#Comparing Speaker words
+bind_rows(Arthur_Benjamin, Scott_McCloud) %>%
+  group_by(word) %>%
+  filter(sum(n) > 12) %>%
+  ungroup() %>%
+  pivot_wider(names_from="speaker",
+              values_from = "n",
+              values_fill = 0) %>%
+  ggplot(aes(`Scott McCloud`, `Arthur Benjamin`)) + 
+  geom_abline(color="#00ba38", size = 1.2, alpha = 0.8, lty = 2) +
+  geom_text_repel(aes(label=word), max.overlaps = 15, label.size = 0.25, label.r = 0.15) + 
+  ggtitle("Comparison of Top words by the Ted Speakers")
+
+```
+Here, I am performing the sentiment analysis with 'nrc' lexicon and presenting the table with n word sentiments in both the speakers and their corresponding OR values using the _compute_OR()_ from dsEssex package. 
+
+
+```{r nrclexicon, echo=FALSE}
+library(tidytext)
+library(textdata)
+
+#nrc Sentiment Analysis
+
+speakers_senti <- rbind(Arthur_Benjamin, Scott_McCloud)
+
+#getting nrc sentiment words by inner_join()
+speakers_senti <- speakers_senti %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  count(speaker, sentiment)
+
+#arranging the table properly to calculate the OR function
+senti_table2 <- head(speakers_senti, 10)
+colnames(senti_table2)[which(colnames(senti_table2)=="n")] <- "Arthur_Benjamin"
+senti_table_Arthur <- subset(senti_table2, select = c("sentiment", "Arthur_Benjamin"))
+
+senti_table1 <- tail(speakers_senti, 10)
+colnames(senti_table1)[which(colnames(senti_table1)=="n")] <- "Scott_McCloud"
+senti_table_Scott <- subset(senti_table1, select = ("Scott_McCloud"))
+
+senti_table <- cbind(senti_table_Arthur, senti_table_Scott)
+
+#Computing OR function
+
+senti_table <- senti_table %>% 
+  mutate(OR = compute_OR(Arthur_Benjamin, Scott_McCloud, correction = FALSE), 
+         log_OR = log(OR), sentiment = reorder(sentiment, log_OR))
+
+#visualizing the table neatly using kbl()
+senti_table %>%
+  kbl() %>%
+  kable_classic(full_width = F, html_font = "Cambria", position = "left")
+
+```
+
+Presenting a plot with the association of sentiments in both the speakers. The blue coloured bars indicates the words spoken by Arthur Benjamin and the one in red represents Scott McCloud's words. As we can interpret from the chart, Arthur's speech had most of the words related to surprise, whereas in Scott's speech words related to sadness has been more used.
+
+* _coord_flip()_ - used this function to flip the coordinates of Log Odds ratio and the words from nrc sentiment.
+
+```{r nrcplot, echo=FALSE, fig.height=4, fig.width=6}
+#nrc Sentiment analysis plot
+
+senti_table %>%
+  ggplot(aes(sentiment, log_OR, fill = log_OR < 0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words") +
+  ylab("Log odds ratio") + ggtitle("The association between speakers' sentiments") +
+  coord_flip() + 
+  scale_fill_manual(name = "Sentiments", values = c("#f8766d", "cornflowerblue"))
+
+```
+
+The following graph interprets the sentiment of the speakers' words using 'bing' lexicon, where we filter the data according to the speaker and adding the sentiment column using _inner_join()_ with respect to the words as positive or negative. The bars above 0 denotes a positive word and which are below 0 indicates a negative word. Finally, with the sentiment analysis, We can interpret that the speaker Arthur Benjamin's speech was more optimistic than the speech of Scott McCloud's, interpreted that with percentage pie chart of both the speakers.
+
+```{r bing, echo=FALSE, fig.width = 10}
+#bing Sentiment Analysis
+
+bing <- get_sentiments("bing")
+
+#Arthur Benjamin's words
+Arthur_Benjamin_bing <- MyData %>%
+  filter(speaker == "Arthur Benjamin") %>%
+  anti_join(get_stopwords()) %>%
+  count(speaker, word, sort=TRUE) %>%
+  inner_join(get_sentiments("bing"), by = "word")
+
+Arthur_Benjamin_bing$n[Arthur_Benjamin_bing$sentiment == 'negative'] <- -1 * 
+  Arthur_Benjamin_bing$n[Arthur_Benjamin_bing$sentiment == 'negative']
+
+ggplot(Arthur_Benjamin_bing, aes(word, n)) + 
+  geom_col(fill = ifelse(Arthur_Benjamin_bing$n>0, "cornflowerblue", "#f8766d")) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1), ) +
+  ylab("number of words") +
+  ggtitle("Sentiment analysis of Arthur Benjamin's words")
+
+#Scott McCloud's words
+Scott_McCloud_bing <- MyData %>%
+  filter(speaker == "Scott McCloud") %>%
+  anti_join(get_stopwords()) %>%
+  count(speaker, word, sort=TRUE) %>%
+  inner_join(get_sentiments("bing"), by = "word")
+
+Scott_McCloud_bing$n[Scott_McCloud_bing$sentiment == 'negative'] <- -1 * 
+  Scott_McCloud_bing$n[Scott_McCloud_bing$sentiment == 'negative']
+
+ggplot(Scott_McCloud_bing, aes(word, n)) + 
+  geom_col(fill = ifelse(Scott_McCloud_bing$n>0, "cornflowerblue", "#f8766d")) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) +
+  ylab("number of words") +
+  ggtitle("Sentiment analysis of Scott McCloud's words")
+```
+
+```{r percent, echo=FALSE, fig.height=3.5, fig.width=7}
+#Percentage of sentiment in Arthur's words
+Arthur_sentiment_percent <- MyData %>%
+  filter(speaker == "Arthur Benjamin") %>%
+  anti_join(get_stopwords()) %>%
+  count(speaker, word, sort=TRUE) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>% 
+  count(sentiment) %>%
+  mutate(total = sum(n), percent = n/total) %>%
+  arrange(desc(percent))
+
+#Percentage of sentiment in Scott's words
+Scott_sentiment_percent <- MyData %>%
+  filter(speaker == "Scott McCloud") %>%
+  anti_join(get_stopwords()) %>%
+  count(speaker, word, sort=TRUE) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>% 
+  count(sentiment) %>%
+  mutate(total = sum(n), percent = n/total) %>%
+  arrange(desc(percent))
+  
+#Pie visualization of sentiment percentages
+
+par(mfrow=c(1,2))
+
+pie(Arthur_sentiment_percent$percent, 
+    Arthur_sentiment_percent$percent*100, 
+    xlab="Arthur Benjamin",
+    col=c("#00ba38", "coral1"))
+mtext("Sentiment Percent",side=3,line=-2,outer=TRUE, cex = 1, font = 1)
+pie(Scott_sentiment_percent$percent, 
+    Scott_sentiment_percent$percent*100, 
+    xlab="Scott McCloud",
+    col=c("#00ba38", "coral1"))
+
+legend("topright", c("Positive","Negative"), cex = 0.6,
+       fill = c("#00ba38", "coral1"))
+```
